@@ -1,55 +1,114 @@
 import pandas as pd
 from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+
+from sklearn.linear_model import Perceptron, LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neural_network import MLPClassifier
 
 # ---------------------------------------------------------
-# 1) Load the dataset (space‑separated, no header)
+# 1) Load file as raw text lines
 # ---------------------------------------------------------
-df = pd.read_csv("your_dataset.txt", sep=" ", header=None, engine="python")
+with open("german-numeric.csv", "r") as f:
+    lines = f.read().strip().split("\n")
+
+# Remove header row
+lines = lines[1:]
 
 # ---------------------------------------------------------
-# 2) Assign column names (A1, A2, A3, ..., A21)
-# Your dataset has 21 attributes per row.
+# 2) Split each line manually by comma
 # ---------------------------------------------------------
-df.columns = [f"A{i}" for i in range(1, len(df.columns) + 1)]
+rows = []
+for line in lines:
+    parts = line.split(",")
+    parts = parts[1:-1]   # remove empty first + last
+    rows.append(parts)
 
 # ---------------------------------------------------------
-# 3) Drop rows with missing values
+# 3) Convert to DataFrame
 # ---------------------------------------------------------
-df = df.dropna()
+df = pd.DataFrame(rows)
 
 # ---------------------------------------------------------
-# 4) Drop irrelevant columns (none here, but kept for assignment format)
+# 4) Rename columns automatically
 # ---------------------------------------------------------
-irrelevant = []   # e.g., ['ID']
-df = df.drop(columns=irrelevant, errors='ignore')
+df.columns = [f"Column{i}" for i in range(1, df.shape[1] + 1)]
+
+print("Loaded shape:", df.shape)
+print(df.head())
 
 # ---------------------------------------------------------
-# 5) Identify target and features
-# In the German Credit dataset, the LAST column is the class label (A201)
+# 5) Convert to numeric and drop missing
+# ---------------------------------------------------------
+df = df.apply(pd.to_numeric, errors="coerce").dropna()
+
+# ---------------------------------------------------------
+# 6) Target = last column
 # ---------------------------------------------------------
 target_col = df.columns[-1]
 y = df[target_col]
 X = df.drop(columns=[target_col])
 
+print("Target column:", target_col)
+
 # ---------------------------------------------------------
-# 6) Encode categorical features
-# Any column containing strings like "A11", "A34", etc. is categorical
+# 7) Encode features
 # ---------------------------------------------------------
 for col in X.columns:
-    if X[col].dtype == object:
-        X[col] = LabelEncoder().fit_transform(X[col])
+    X[col] = LabelEncoder().fit_transform(X[col])
+
+y = LabelEncoder().fit_transform(y)
 
 # ---------------------------------------------------------
-# 7) Encode target if needed
-# ---------------------------------------------------------
-if y.dtype == object:
-    y = LabelEncoder().fit_transform(y)
-
-# ---------------------------------------------------------
-# 8) Scale numerical features
+# 8) Scale features
 # ---------------------------------------------------------
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
+print("Preprocessing complete.")
 print("Shape:", X_scaled.shape)
 print("Classes:", set(y))
+
+# ---------------------------------------------------------
+# 9) Train/Test Split
+# ---------------------------------------------------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled, y, test_size=0.25, random_state=42, stratify=y
+)
+
+# ---------------------------------------------------------
+# 10) Models
+# ---------------------------------------------------------
+models = {
+    'Linear Classifier': Perceptron(max_iter=1000, random_state=42),
+    'Logistic Regression': LogisticRegression(max_iter=1000, random_state=42),
+    'KNN': KNeighborsClassifier(n_neighbors=5),
+    'Gaussian NB': GaussianNB(),
+    'Neural Network': MLPClassifier(hidden_layer_sizes=(64,),
+                                    max_iter=500, random_state=42),
+}
+
+# ---------------------------------------------------------
+# 11) Train + Evaluate
+# ---------------------------------------------------------
+results = {}
+
+for name, model in models.items():
+    print(f"\n=== Training {name} ===")
+    model.fit(X_train, y_train)
+    preds = model.predict(X_test)
+    acc = accuracy_score(y_test, preds)
+    results[name] = acc
+
+    print("Accuracy:", acc)
+    print("Confusion Matrix:\n", confusion_matrix(y_test, preds))
+    print("Classification Report:\n", classification_report(y_test, preds))
+
+# ---------------------------------------------------------
+# 12) Summary
+# ---------------------------------------------------------
+print("\n=== Accuracy Summary ===")
+for name, acc in results.items():
+    print(f"{name:20s}  {acc:.4f}")
